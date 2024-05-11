@@ -63,7 +63,13 @@ data class ImageToTextResponse(
 
 class MainScreenViewModel:ViewModel(){
     var userList:MutableState<List<PA>> = mutableStateOf(emptyList())
-    var text:MutableState<String> = mutableStateOf("")
+    var text:MutableState<List<String>> = mutableStateOf(emptyList())
+    var statusE:MutableState<Pair<Int,Int>> = mutableStateOf(Pair(0,0))
+    var progressStatus:MutableState<Boolean> = mutableStateOf(false)
+    var statusP:MutableState<Pair<Int,Int>> = mutableStateOf(Pair(0,0))
+    var immutableText= emptyList<String>()
+    var error:MutableState<String> = mutableStateOf("")
+    val data = " hello #512 & * ©"
     val client = HttpClient(){
         install(ContentNegotiation) {
             json(
@@ -100,13 +106,23 @@ class MainScreenViewModel:ViewModel(){
         }
     }
 
+    init {
+        getUser()
+    }
 
+    fun cleanString(input:String):String{
+        val allowedChars = setOf('a', 'b', 'c', 'd','e','f','g','h','i','j','k','l','m','n','o','p','q','r','s','t','u','v','w','x','y', 'z', 'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z', '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', ' ', '!', '?', '.', ',',':', ';', '-', '_','<','/','>')
+        val newString = input.filter { it in allowedChars }
+        val newString2 = newString.replace("<br />","~")
+        val output = newString2.replace("PM","PM!")
+        return output
+    }
     fun getUser(){
         viewModelScope.launch {
             try {
                 val response = client.get("http://www.ideetracker.com/mobapp_ws/SP_PA_List.jsp")
                 Log.d("Response",response.toString())
-
+                println(data)
                 if (response.status.isSuccess()) {
                     val responseBody = response.bodyAsText()
                     val userData = Json.decodeFromString<Response>(responseBody)
@@ -126,72 +142,95 @@ class MainScreenViewModel:ViewModel(){
         }
     }
 
-    fun pushText(){
+    fun pushText(id:String){
+        println(immutableText.size)
+        statusP.value=Pair(0,immutableText.size)
+        progressStatus.value = true
         viewModelScope.launch {
-            try {
-                val response = client2.post("http://www.ideetracker.com/mobapp_ws/img2text.jsp?Str_DriverID=1353&Str_PA_ID=1350&Str_img2text=CONVERTED_TEXT")
-                Log.d("Response",response.toString())
-
-                if (response.status.isSuccess()) {
-                    val responseBody = response.bodyAsText()
-                    val resData = Json.decodeFromString<sendResponse>(responseBody)
-                    if(resData.recived == 1){
-                        Log.d("Response",resData.Ack_Msg)
-                    }
-                    else{
-                        //userList.value = emptyList()
+            immutableText.forEach { it->
+                statusP.value= Pair(immutableText.indexOf(it)+1,immutableText.size)
+                try {
+                    val response = client2.post("http://www.ideetracker.com/mobapp_ws/img2text.jsp?Str_DriverID=1353&Str_PA_ID=$id&Str_img2text=$it")
+                    Log.d("Response",response.toString())
+                    print(it)
+                    if (response.status.isSuccess()) {
+                        val responseBody = response.bodyAsText()
+                        val resData = Json.decodeFromString<sendResponse>(responseBody)
+                        if(resData.recived == 1){
+                            Log.d("Response",resData.Ack_Msg)
+                        }
+                        else{
+                            //userList.value = emptyList()
+                            Log.d("Response",responseBody.toString())
+                        }
                         Log.d("Response",responseBody.toString())
                     }
-                    Log.d("Response",responseBody.toString())
+                } catch (e: Throwable){
+                    println(e.message)
                 }
-            } catch (e: Throwable){
-                println(e.message)
             }
+            text.value = emptyList()
+            error.value = "Submitted successfully"
+            progressStatus.value = false
         }
     }
 
-    fun extractText(imageByteArray:ByteArray) {
+    fun extractText(imageByteArrays:List<ByteArray>) {
         viewModelScope.launch {
-            try {
-                //val base64 = encodeImage(imageBitmap)
-                println("entered")
-                println(token)
+            error.value = ""
+            immutableText= emptyList()
+            statusE.value= Pair(0,imageByteArrays.size)
+            progressStatus.value = true
+            imageByteArrays.forEach{it->
+                statusE.value= Pair(imageByteArrays.indexOf(it)+1,imageByteArrays.size)
+                try {
+                    //val base64 = encodeImage(imageBitmap)
+                    println("entered")
+                    println(token)
 
-                val response = client3.post("https://www.imagetotext.info/api/imageToText"){
-                    header("Authorization", "Bearer $token")
-                    setBody(MultiPartFormDataContent(
-                        formData {
-                            append("image",imageByteArray, Headers.build {
-                                append(HttpHeaders.ContentType,"image/jpeg")
-                                append(HttpHeaders.ContentDisposition, "filename=image.jpg")
+                    val response = client3.post("https://www.imagetotext.info/api/imageToText"){
+                        header("Authorization", "Bearer $token")
+                        setBody(MultiPartFormDataContent(
+                            formData {
+                                append("image",it, Headers.build {
+                                    append(HttpHeaders.ContentType,"image/jpeg")
+                                    append(HttpHeaders.ContentDisposition, "filename=image.jpg")
+                                }
+                                )
                             }
-                            )
+                        ))
+                    }
+
+                    if(response.status.isSuccess()){
+                        val extractedText = response.body<ImageToTextResponse>()
+                        if(extractedText.error){
+                            error.value = extractedText.message.toString()
+                            immutableText = emptyList()
+                            return@forEach
                         }
-                    ))
-                }
-                /*.post(urlString = "https://www.imagetotext.info/api/imageToText"){
-                header("Authorization", "Bearer $token")
-                //contentType(ContentType.Application.Json)
-                //setBody(ImageBase64(base64!!))
-            }*/
-                if(response.status.isSuccess()){
-                    val extractedText = response.body<ImageToTextResponse>()
-                    if(extractedText.error){
-                        text.value = extractedText.message.toString()
+                        else{
+                            immutableText = immutableText + cleanString(extractedText.result.toString())
+                        }
+                        println(response.bodyAsText())
                     }
                     else{
-                        text.value = extractedText.result.toString()
+                        error.value = response.bodyAsText()
+                        immutableText = emptyList()
+                        println(response.bodyAsText())
+                        return@forEach
                     }
-                    println(response.bodyAsText())
+                    println(response.toString())
+                } catch (e: Throwable) {
+                    println(e.message + "E Thr")
+                    error.value = e.message.toString()
+                    immutableText = emptyList()
+                    return@forEach
                 }
-                else{
-                    println(response.bodyAsText())
-                }
-                println(response.toString())
-            } catch (e: Throwable) {
-                println(e.message + "E Thr")
-                text.value = e.message.toString()
             }
+
+            text.value = immutableText
+            println(text.value.size)
+            progressStatus.value = false
         }
     }
 }

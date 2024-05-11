@@ -4,15 +4,20 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.gestures.ScrollableState
 import androidx.compose.foundation.gestures.scrollable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -42,36 +47,44 @@ fun MainScreen(viewModel: MainScreenViewModel){
 
     var image by remember { mutableStateOf<ImageBitmap?>(null) }
     var imageByteArray by remember { mutableStateOf<ByteArray?>(null) }
-    viewModel.getUser()
 
-    val singleImagePicker = rememberImagePickerLauncher(
-        selectionMode = SelectionMode.Single,
+    val multipleImagePicker = rememberImagePickerLauncher(
+        selectionMode = SelectionMode.Multiple(),
         scope = scope,
         onResult = { byteArrays ->
-            byteArrays.firstOrNull()?.let {
-                imageByteArray = it
-                image = it.toImageBitmap()
-                viewModel.extractText(imageByteArray!!)
+            byteArrays.forEach {
+                println(it)
             }
+            viewModel.extractText(byteArrays)
         }
     )
-    Column(modifier = Modifier.fillMaxSize(), verticalArrangement = Arrangement.SpaceAround, horizontalAlignment = Alignment.CenterHorizontally) {
-        Text(
-            text = viewModel.text.value,
-            modifier = Modifier
-                .padding(2.dp)
-                .border(width = 2.dp, color = Color.Gray, shape = RoundedCornerShape(2.dp))
-                .fillMaxWidth(.9f)
-                .fillMaxHeight(.75f)
-                .verticalScroll(rememberScrollState(0)),
-        )
-        DropdownMenuWithLabel(label = "PA-ID", itemList = viewModel.userList.value, onSelectedValueChange = {value->id = value})
-        Button(onClick = { singleImagePicker.launch() }, modifier = Modifier.fillMaxWidth(.9f), shape = RoundedCornerShape(5.dp)) {
-            Text(text = "Add Image")
+    Box (modifier = Modifier.fillMaxSize()){
+        Column(modifier = Modifier.fillMaxSize(), verticalArrangement = Arrangement.SpaceAround, horizontalAlignment = Alignment.CenterHorizontally) {
+            Text(text = "Extracting Text : ${viewModel.statusE.value.first} / ${viewModel.statusE.value.second}")
+            Text(text = "Pushing Text : ${viewModel.statusP.value.first} / ${viewModel.statusP.value.second}")
+            Text(
+                text = if(viewModel.error.value.isEmpty()) viewModel.text.value.toString() else viewModel.error.value,
+                modifier = Modifier
+                    .padding(2.dp)
+                    .border(width = 2.dp, color = Color.Gray, shape = RoundedCornerShape(2.dp))
+                    .fillMaxWidth(.9f)
+                    .fillMaxHeight(.75f)
+                    .verticalScroll(rememberScrollState(0)),
+            )
+            DropdownMenuWithLabel(label = "PA-ID", itemList = viewModel.userList.value, onSelectedValueChange = {value->id = value})
+            Button(onClick = { multipleImagePicker.launch() }, enabled = viewModel.statusE.value.first == viewModel.statusE.value.second,modifier = Modifier.fillMaxWidth(.9f), shape = RoundedCornerShape(5.dp)) {
+                Text(text = "Add Image")
+            }
+            Button(onClick = { viewModel.pushText(id)}, enabled = viewModel.text.value.isNotEmpty() && id.isNotEmpty(), modifier = Modifier.fillMaxWidth(.9f), shape = RoundedCornerShape(5.dp)) {
+                Text(text = "Submit Data")
+            }
         }
-        Button(onClick = { viewModel.pushText()}, enabled = viewModel.text.value.isNotEmpty(), modifier = Modifier.fillMaxWidth(.9f), shape = RoundedCornerShape(5.dp)) {
-            Text(text = "Submit Data")
+        if(viewModel.progressStatus.value){
+            Column(modifier = Modifier.fillMaxSize(), verticalArrangement = Arrangement.Center, horizontalAlignment = Alignment.CenterHorizontally) {
+                CircularProgressIndicator(modifier = Modifier.width(64.dp), color = MaterialTheme.colorScheme.onSecondary, trackColor = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
         }
     }
+
 }
 
